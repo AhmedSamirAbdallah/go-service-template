@@ -10,5 +10,7 @@ type Repository[T any] interface {
 	Update(ctx context.Context, id interface{}, entity *T) error
 	Delete(ctx context.Context, id interface{}) error
 	Count(ctx context.Context) (int64, error)
+	CountByFilter(ctx context.Context, filter interface{}) (int64, error)
 	ExistsByID(ctx context.Context, id interface{}) (bool, error)
+	ExistsByFilter(ctx context.Context, filter interface{}) (bool, error)
 }
