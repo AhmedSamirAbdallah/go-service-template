@@ -8,10 +8,10 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo"
 )
-
 type NoSQLRepository[Model any] struct {
 	collection *mongo.Collection
 }
+var _ database.Repository[Model] = *(NoSQLRepository[Model])(nil)
 
 // NewNoSQLRepository creates a new NoSQLRepository instance
 func NewNoSQLRepository[Model any](client *mongo.Client, dbName, collectionName string) (*NoSQLRepository[Model], error) {
