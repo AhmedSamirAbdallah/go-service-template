@@ -2,22 +2,12 @@ package database
 
 import "context"
 
-type SortOption struct {
-	Field     string
-	Direction int // 1 for asc , -1 for desc
-}
-type QueryOptions struct {
-	Sort       []SortOption
-	Projection interface{} // Fields to include or exclude in the result
-	Limit      int         // Maximum number of results to return
-	Offset     int         // Number of results to skip
-}
-
 type Repository[T any] interface {
-	// Create & Update
+	// Create
 	Save(ctx context.Context, entity *T) error
-	SaveIfNotExists(ctx context.Context, filter interface{}, entity *T) error
 	SaveAll(ctx context.Context, entities []*T) error
+	
+	//Update
 	Update(ctx context.Context, id interface{}, entity *T) error
 	UpdateByFilter(ctx context.Context, filter interface{}, entity *T) error
 	BulkUpdate(ctx context.Context, filters []interface{}, updates []*T) error

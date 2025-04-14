@@ -17,6 +17,7 @@ var (
 	err    error
 )
 
+//mongodb://admin:adminpassword@localhost:27017
 func InitNoSQLDatabase(uri string) error {
 	// Connection is already initialized
 	if client != nil {
