@@ -13,6 +13,7 @@ import (
 
 type NoSQLRepository[T any] struct {
 	collection *mongo.Collection
+	client     *mongo.Client
 }
 
 // var _ database.Repository[T] = *(NoSQLRepository[T])(nil)
@@ -31,7 +32,7 @@ func NewNoSQLRepository[T any](client *mongo.Client, dbName, collectionName stri
 			Err:       errors.New("database name and collection name must not be empty or whitespace")}
 	}
 
-	return &NoSQLRepository[T]{collection: client.Database(dbName).Collection(collectionName)}, nil
+	return &NoSQLRepository[T]{collection: client.Database(dbName).Collection(collectionName), client: client}, nil
 }
 
 func (r *NoSQLRepository[T]) Save(ctx context.Context, entity *T) error {
@@ -74,6 +75,7 @@ func (r *NoSQLRepository[T]) SaveAtomic(ctx context.Context, entities []*T) (*T,
 		return nil, nil
 	}
 
+	//TODO use errors.As
 	// Check if it's a BulkWriteException to extract which insert failed
 	bulkErr, ok := err.(mongo.BulkWriteException)
 	if !ok {
@@ -150,13 +152,57 @@ func (r *NoSQLRepository[T]) SavePartialSuccess(ctx context.Context, entities []
 	return nil, nil
 }
 
-// // Transaction Save: Full atomicity with a transaction
-// func (r *NoSQLRepository[T]) saveWithTransaction(ctx context.Context, entities []*T) error {
-// 	if len(entities) == 0 {
-// 		return &database.DatabaseError{Operation: "saveWithTransaction in SaveAll", Err: errors.New("entities cannot be empty")}
-// 	}
+// Transaction Save: Full atomicity with a transaction
+func (r *NoSQLRepository[T]) saveWithTransaction(ctx context.Context, entities []*T) error {
+	// Return error if the input slice is empty
+	if len(entities) == 0 {
+		return &database.DatabaseError{
+			Operation: "savePartialSuccess in SaveAll",
+			Err:       errors.New("entities cannot be empty")}
+	}
 
-// }
+	// Start a new session
+	session, err := r.client.StartSession()
+	if err != nil {
+		return &database.DatabaseError{
+			Operation: "saveWithTransaction in SaveAll",
+			Err:       fmt.Errorf("failed to start session: %w", err),
+		}
+	}
+	defer session.EndSession(ctx)
+
+	// Use WithTransaction for automatic handling of retries and context
+	callback := func(ctxMongo mongo.SessionContext) (interface{}, error) {
+
+		interfaceEntities := make([]interface{}, len(entities))
+		for idx, entity := range entities {
+			interfaceEntities[idx] = entity
+		}
+
+		opts := options.InsertMany().SetOrdered(false)
+
+		_, err = r.collection.InsertMany(ctx, interfaceEntities, opts)
+		if err != nil {
+			return nil, &database.DatabaseError{
+				Operation: "saveWithTransaction in SaveAll",
+				Err:       fmt.Errorf("insert failed: %w", err),
+			}
+		}
+
+		return nil, nil
+	}
+
+	// Run the transaction
+	_, err = session.WithTransaction(ctx, callback)
+	if err != nil {
+		return &database.DatabaseError{
+			Operation: "saveWithTransaction in SaveAll",
+			Err:       fmt.Errorf("transaction failed: %w", err),
+		}
+	}
+
+	return nil
+}
 
 func (r *NoSQLRepository[T]) SaveAll(ctx context.Context, entities []*T) error {
 	// Check if the input slice is empty
